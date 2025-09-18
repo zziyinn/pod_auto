@@ -1,0 +1,60 @@
+name: Daily POD CSV Clean
+
+on:
+  schedule:
+    # 11:00 PM America/New_York (DST-safe: EDT=UTC-4 → 03:00 UTC; EST=UTC-5 → 04:00 UTC)
+    - cron: "0 3 * * *"
+    - cron: "0 4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  TZ: America/New_York
+  RUN_TODAY_ONLY: "true"
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    steps:
+      # Time gate so we only proceed when it's 23:00 in America/New_York
+      - name: Time gate (run only at 11 PM America/New_York)
+        id: timegate
+        run: |
+          hour=$(TZ=America/New_York date +%H)
+          if [ "$hour" = "23" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.timegate.outputs.ok == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.timegate.outputs.ok == 'true'
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        if: steps.timegate.outputs.ok == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Write service account key from secret
+        if: steps.timegate.outputs.ok == 'true'
+        run: |
+          echo '${{ secrets.GDRIVE_SA_JSON }}' > credentials.json
+
+      - name: Run pipeline
+        if: steps.timegate.outputs.ok == 'true'
+        env:
+          FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          python scripts/drive_pipeline.py \
+            --folder-id "$FOLDER_ID" \
+            --credentials credentials.json \
+            --run-today-only "${RUN_TODAY_ONLY}" \
+            --tz "${TZ}"
