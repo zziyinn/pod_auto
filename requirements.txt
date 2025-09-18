@@ -1,5 +1,6 @@
 pydrive2==1.20.0
 pandas==2.2.2
 python-dateutil==2.9.0.post0
-+pyOpenSSL==23.2.0
-+cryptography<43
+pyOpenSSL==23.2.0
+cryptography<43
+google-api-python-client==2.100.0
